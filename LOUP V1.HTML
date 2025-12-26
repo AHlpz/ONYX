@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Finance Master 5.0 (CSV & Game)</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --success: #10b981;
+            --danger: #ef4444;
+            --bg: #f3f4f6;
+            --card: #ffffff;
+            --text: #1f2937;
+        }
+        
+        body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 0; padding-bottom: 80px;}
+        
+        /* Nav */
+        nav { background: white; padding: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: flex; gap: 10px; position: sticky; top: 0; z-index: 100; overflow-x: auto; white-space: nowrap; }
+        .nav-btn { padding: 8px 12px; border: none; background: transparent; cursor: pointer; border-radius: 6px; font-weight: 600; color: #6b7280; }
+        .nav-btn.active { background: var(--primary); color: white; }
+        
+        .container { max-width: 900px; margin: 20px auto; padding: 0 15px; }
+        
+        /* Tabs & Cards */
+        .tab-content { display: none; animation: fadeIn 0.3s; }
+        .tab-content.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .card { background: var(--card); padding: 20px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        h2 { margin-top: 0; color: #374151; font-size: 1.2rem; border-bottom: 2px solid #f3f4f6; padding-bottom: 10px; }
+
+        /* Forms */
+        .form-row { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }
+        .form-group { flex: 1; min-width: 150px; }
+        input, select, textarea { width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; box-sizing: border-box; }
+        label { display: block; font-size: 0.85em; color: #6b7280; margin-bottom: 4px; }
+        
+        .btn { background: var(--primary); color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%; }
+        .btn:hover { opacity: 0.9; }
+        .btn-outline { background: white; border: 2px solid var(--primary); color: var(--primary); }
+
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { text-align: left; padding: 10px; border-bottom: 1px solid #e5e7eb; font-size: 0.9em; }
+        th { background: #f9fafb; font-size: 0.75em; text-transform: uppercase; }
+        .amount-neg { color: var(--danger); font-weight: bold; }
+        .amount-pos { color: var(--success); font-weight: bold; }
+
+        /* Gamification */
+        .xp-container { background: #e5e7eb; height: 20px; border-radius: 10px; overflow: hidden; margin: 20px 0; }
+        .xp-bar { background: linear-gradient(90deg, #f59e0b, #d97706); height: 100%; width: 0%; transition: width 0.5s ease; }
+        .badge-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 10px; margin-top: 15px; }
+        .badge { text-align: center; padding: 10px; border: 2px solid #e5e7eb; border-radius: 10px; opacity: 0.4; filter: grayscale(1); }
+        .badge.unlocked { opacity: 1; filter: grayscale(0); border-color: #f59e0b; background: #fffbeb; }
+        .badge-icon { font-size: 2em; display: block; }
+        
+        /* CSV Area */
+        textarea.csv-input { font-family: monospace; font-size: 0.8em; height: 150px; white-space: pre; overflow-x: auto; }
+        .action-row { display: flex; gap: 10px; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+<nav>
+    <button class="nav-btn active" onclick="switchTab('dashboard')">📝 Saisie</button>
+    <button class="nav-btn" onclick="switchTab('history')">📚 Hist.</button>
+    <button class="nav-btn" onclick="switchTab('game')">🏆 Jeu</button>
+    <button class="nav-btn" onclick="switchTab('config')">⚙️ Codes</button>
+    <button class="nav-btn" onclick="switchTab('data')">💾 CSV</button>
+</nav>
+
+<div class="container">
+
+    <!-- 1. DASHBOARD -->
+    <div id="dashboard" class="tab-content active">
+        <div class="card">
+            <h2>Nouveau Mouvement</h2>
+            <form onsubmit="addTransaction(event)">
+                <div style="display:flex; gap:10px; margin-bottom:15px;">
+                    <label style="flex:1; text-align:center; padding:10px; border:1px solid #ccc; border-radius:6px; cursor:pointer;">
+                        <input type="radio" name="type" value="exp" checked onclick="toggleType('exp')"> 📉 Dépense
+                    </label>
+                    <label style="flex:1; text-align:center; padding:10px; border:1px solid #ccc; border-radius:6px; cursor:pointer;">
+                        <input type="radio" name="type" value="inc" onclick="toggleType('inc')"> 📈 Revenu
+                    </label>
+                </div>
+                <div class="form-row">
+                    <div class="form-group"><label>Date</label><input type="date" id="t-date" required></div>
+                    <div class="form-group"><label>Montant</label><input type="number" id="t-amount" step="0.01" required></div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group"><label>Code</label><select id="t-code" required></select></div>
+                    <div class="form-group"><label>Desc</label><input type="text" id="t-desc"></div>
+                </div>
+                <button type="submit" class="btn">Valider</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- 2. HISTORIQUE -->
+    <div id="history" class="tab-content">
+        <div class="card">
+            <h2>Historique (<span id="hist-count">0</span>)</h2>
+            <input type="text" id="hist-search" placeholder="🔍 Filtrer..." onkeyup="renderHistory()" style="margin-bottom:10px;">
+            <div style="overflow-x:auto;">
+                <table id="hist-table"><thead><tr><th>Date</th><th>Code</th><th>Desc</th><th>Montant</th><th></th></tr></thead><tbody></tbody></table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. GAMIFICATION -->
+    <div id="game" class="tab-content">
+        <div class="card" style="text-align: center;">
+            <h2>Niveau <span id="lvl-current" style="color:var(--primary)">1</span></h2>
+            <div style="font-size: 3em;">🧙‍♂️</div>
+            <p id="lvl-title">Novice</p>
+            <div class="xp-container"><div class="xp-bar" id="xp-fill"></div></div>
+            <div style="display:flex; justify-content:space-between; font-size:0.8em; color:#666;">
+                <span>XP: <span id="xp-score">0</span></span>
+                <span>Prochain: <span id="xp-next">100</span></span>
+            </div>
+        </div>
+        <div class="card">
+            <h2>Collection de Badges</h2>
+            <div class="badge-grid">
+                <div class="badge" id="b-first"><span class="badge-icon">🥚</span>1er Pas</div>
+                <div class="badge" id="b-10"><span class="badge-icon">🐣</span>Habitué</div>
+                <div class="badge" id="b-50"><span class="badge-icon">🦅</span>Expert</div>
+                <div class="badge" id="b-saver"><span class="badge-icon">💰</span>Écureuil</div>
+                <div class="badge" id="b-org"><span class="badge-icon">⚙️</span>Architecte</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. CONFIG -->
+    <div id="config" class="tab-content">
+        <div class="card">
+            <h2>Gérer les Codes</h2>
+            <form onsubmit="saveCode(event)">
+                <div class="form-row">
+                    <div class="form-group"><input type="text" id="c-id" placeholder="CODE (ex: LOYER)" required oninput="this.value=this.value.toUpperCase()"></div>
+                    <div class="form-group"><input type="text" id="c-grp" placeholder="GROUPE (ex: MAISON)" required oninput="this.value=this.value.toUpperCase()"></div>
+                </div>
+                <div class="form-group"><input type="text" id="c-desc" placeholder="Description"></div>
+                <button type="submit" class="btn">Ajouter / Modifier</button>
+            </form>
+            <table id="code-table"><thead><tr><th>Code</th><th>Grp</th><th>Desc</th><th></th></tr></thead><tbody></tbody></table>
+        </div>
+    </div>
+
+    <!-- 5. IMPORT / EXPORT CSV -->
+    <div id="data" class="tab-content">
+        <div class="card">
+            <h2>📤 Exporter (CSV)</h2>
+            <p style="font-size:0.9em; color:#666;">Compatible Excel, Google Sheets, Numbers.</p>
+            <div class="action-row">
+                <button class="btn btn-outline" onclick="exportCSV('transactions')">Télécharger Historique</button>
+                <button class="btn btn-outline" onclick="exportCSV('codes')">Télécharger Codes</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>📥 Importer (CSV)</h2>
+            <p style="font-size:0.9em; color:#666;">Copie le contenu de ton fichier CSV ici (avec ou sans les entêtes).</p>
+            <textarea id="csv-import-area" class="csv-input" placeholder="Date,Code,Groupe,Desc,Montant..."></textarea>
+            <div class="action-row" style="margin-top:10px;">
+                <button class="btn" onclick="parseCSV('transactions')">Importer Historique</button>
+                <button class="btn" onclick="parseCSV('codes')">Importer Codes</button>
+            </div>
+            <p style="font-size:0.8em; color:var(--danger);">⚠️ L'import ajoute aux données existantes. Attention aux doublons !</p>
+        </div>
+        
+        <div class="card" style="border:1px solid var(--danger);">
+            <h2 style="color:var(--danger)">Reset</h2>
+            <button class="btn" style="background:var(--danger)" onclick="wipeData()">Tout Effacer</button>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    // --- DATA STORE ---
+    let db = JSON.parse(localStorage.getItem('financeDB')) || {
+        trans: [],
+        codes: [
+            {id:'ALIM', grp:'VIE', desc:'Courses'},
+            {id:'LOYER', grp:'FIXE', desc:'Appartement'}
+        ]
+    };
+
+    function save() {
+        localStorage.setItem('financeDB', JSON.stringify(db));
+        updateGame();
+    }
+
+    // --- NAVIGATION ---
+    function switchTab(t) {
+        document.querySelectorAll('.tab-content').forEach(e => e.classList.remove('active'));
+        document.querySelectorAll('.nav-btn').forEach(e => e.classList.remove('active'));
+        document.getElementById(t).classList.add('active');
+        // Hack nav highlight
+        const idx = ['dashboard','history','game','config','data'].indexOf(t);
+        if(idx>=0) document.querySelectorAll('.nav-btn')[idx].classList.add('active');
+        
+        if(t==='history') renderHistory();
+        if(t==='config') renderCodes();
+        if(t==='game') updateGame();
+    }
+
+    // --- CORE : ADD TRANSACTION ---
+    document.getElementById('t-date').valueAsDate = new Date();
+    
+    function addTransaction(e) {
+        e.preventDefault();
+        const isExp = document.querySelector('input[name="type"]:checked').value === 'exp';
+        let amount = parseFloat(document.getElementById('t-amount').value);
+        if(isExp) amount = -Math.abs(amount); else amount = Math.abs(amount);
+        
+        const cId = document.getElementById('t-code').value;
+        const cObj = db.codes.find(c=>c.id===cId);
+        
+        db.trans.push({
+            id: Date.now(),
+            date: document.getElementById('t-date').value,
+            amount: amount,
+            code: cId,
+            group: cObj ? cObj.grp : '?',
+            desc: document.getElementById('t-desc').value
+        });
+        save();
+        e.target.reset();
+        document.getElementById('t-date').valueAsDate = new Date();
+        alert("Enregistré ! (+10 XP)");
+    }
+
+    // --- CORE : CODES ---
+    function saveCode(e) {
+        e.preventDefault();
+        const id = document.getElementById('c-id').value;
+        const grp = document.getElementById('c-grp').value;
+        const desc = document.getElementById('c-desc').value;
+        
+        // Update or Add
+        const idx = db.codes.findIndex(c => c.id === id);
+        if(idx >= 0) {
+            db.codes[idx] = {id, grp, desc};
+        } else {
+            db.codes.push({id, grp, desc});
+        }
+        save();
+        renderCodes();
+        renderSelect();
+        e.target.reset();
+    }
+
+    // --- RENDERING ---
+    function renderSelect() {
+        const sel = document.getElementById('t-code');
+        sel.innerHTML = '';
+        db.codes.sort((a,b)=>a.id.localeCompare(b.id)).forEach(c => {
+            sel.innerHTML += `<option value="${c.id}">${c.id} - ${c.desc}</option>`;
+        });
+    }
+
+    function renderHistory() {
+        const tb = document.querySelector('#hist-table tbody');
+        tb.innerHTML = '';
+        const search = document.getElementById('hist-search').value.toLowerCase();
+        
+        const filtered = db.trans.filter(t => 
+            (t.desc||'').toLowerCase().includes(search) || 
+            t.code.toLowerCase().includes(search) ||
+            t.date.includes(search)
+        ).sort((a,b) => b.date.localeCompare(a.date));
+
+        document.getElementById('hist-count').innerText = filtered.length;
+
+        filtered.forEach(t => {
+            tb.innerHTML += `
+                <tr>
+                    <td>${t.date}</td>
+                    <td><b>${t.code}</b></td>
+                    <td>${t.desc}</td>
+                    <td class="${t.amount>=0?'amount-pos':'amount-neg'}">${t.amount}€</td>
+                    <td><button onclick="delTrans(${t.id})" style="color:red;border:none;background:none;cursor:pointer">×</button></td>
+                </tr>
+            `;
+        });
+    }
+
+    function renderCodes() {
+        const tb = document.querySelector('#code-table tbody');
+        tb.innerHTML = '';
+        db.codes.forEach(c => {
+            tb.innerHTML += `<tr><td><b>${c.id}</b></td><td>${c.grp}</td><td>${c.desc}</td><td><button onclick="delCode('${c.id}')" style="color:red;border:none;background:none;cursor:pointer">×</button></td></tr>`;
+        });
+    }
+
+    function delTrans(id) {
+        if(confirm('Supprimer ?')) { db.trans = db.trans.filter(t=>t.id!==id); save(); renderHistory(); }
+    }
+    function delCode(id) {
+        if(confirm('Supprimer ?')) { db.codes = db.codes.filter(c=>c.id!==id); save(); renderCodes(); renderSelect(); }
+    }
+
+    // --- GAMIFICATION ENGINE ---
+    function updateGame() {
+        const xp = db.trans.length * 10 + db.codes.length * 50;
+        const level = Math.floor(xp / 200) + 1;
+        const nextXp = level * 200;
+        const prevXp = (level - 1) * 200;
+        const pct = ((xp - prevXp) / (nextXp - prevXp)) * 100;
+
+        document.getElementById('lvl-current').innerText = level;
+        document.getElementById('xp-score').innerText = xp;
+        document.getElementById('xp-next').innerText = nextXp;
+        document.getElementById('xp-fill').style.width = pct + '%';
+        
+        const titles = ["Novice", "Apprenti", "Économe", "Banquier", "Loup de Wall Street"];
+        document.getElementById('lvl-title').innerText = titles[Math.min(level-1, 4)];
+
+        // Badges Logic
+        const unlock = (id) => document.getElementById(id).classList.add('unlocked');
+        if(db.trans.length >= 1) unlock('b-first');
+        if(db.trans.length >= 10) unlock('b-10');
+        if(db.trans.length >= 50) unlock('b-50');
+        // Badge épargne (solde positif)
+        const total = db.trans.reduce((a,b)=>a+b.amount,0);
+        if(total > 500) unlock('b-saver');
+        if(db.codes.length >= 5) unlock('b-org');
+    }
+
+    // --- CSV ENGINE ---
+    function exportCSV(type) {
+        let csvContent = "data:text/csv;charset=utf-8,";
+        if(type === 'transactions') {
+            csvContent += "ID,Date,Code,Groupe,Desc,Montant\n";
+            db.trans.forEach(row => {
+                csvContent += `${row.id},${row.date},${row.code},${row.group},"${row.desc}",${row.amount}\n`;
+            });
+        } else {
+            csvContent += "Code,Groupe,Description\n";
+            db.codes.forEach(row => {
+                csvContent += `${row.id},${row.grp},"${row.desc}"\n`;
+            });
+        }
+        const encUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encUri);
+        link.setAttribute("download", `finance_${type}.csv`);
+        document.body.appendChild(link);
+        link.click();
+    }
+
+    function parseCSV(type) {
+        const txt = document.getElementById('csv-import-area').value;
+        if(!txt) return alert("Colle du CSV d'abord !");
+        
+        const rows = txt.split('\n');
+        let count = 0;
+
+        rows.forEach((row, idx) => {
+            if(idx === 0 || !row.trim()) return; // Skip header or empty
+            
+            // CSV split basic (attention aux virgules dans les guillemets non gérées ici pour simplicité)
+            const cols = row.split(',').map(c => c.replace(/"/g, "").trim());
+            
+            if(type === 'transactions') {
+                // Format attendu: ID, Date, Code, Group, Desc, Montant
+                // On accepte aussi un format plus court importé d'ailleurs: Date, Code, Montant
+                if(cols.length >= 3) {
+                    // Try to find columns intelligently
+                    const date = cols.find(c => c.match(/^\d{4}-\d{2}-\d{2}$/)) || new Date().toISOString().split('T')[0];
+                    const amount = parseFloat(cols.find(c => !isNaN(c) && c.includes('.'))) || 0;
+                    // Code is likely alphanumeric short
+                    const code = cols.find(c => c.length>1 && c.length<10 && isNaN(c)) || 'IMPORT';
+                    
+                    db.trans.push({
+                        id: Date.now() + Math.random(),
+                        date: date,
+                        amount: amount,
+                        code: code,
+                        group: 'IMPORT',
+                        desc: 'Import CSV'
+                    });
+                    count++;
+                }
+            } else {
+                // Codes: Code, Grp, Desc
+                if(cols.length >= 2) {
+                    const id = cols[0].toUpperCase();
+                    if(!db.codes.find(c=>c.id===id)) {
+                        db.codes.push({ id: id, grp: cols[1].toUpperCase(), desc: cols[2]||'' });
+                        count++;
+                    }
+                }
+            }
+        });
+        
+        save();
+        alert(`${count} éléments importés !`);
+        document.getElementById('csv-import-area').value = '';
+    }
+
+    function wipeData() {
+        if(confirm("TOUT SUPPRIMER ?")) { localStorage.removeItem('financeDB'); location.reload(); }
+    }
+
+    // Init
+    renderSelect();
+    updateGame();
+
+</script>
+</body>
+</html>
